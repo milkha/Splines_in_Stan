@@ -70,7 +70,7 @@ A sample of fourth-order splines with $a_i$ independently drawn from $\mathcal{N
 
 ```{r plot_spline_sample, echo=FALSE, fig.height=3.5, fig.width=7.5, cache=TRUE}
 library(splines)
-set.seed(12345)
+set.seed(1234)
 X <- seq(from=-5, to=5, by=.02) 
 B <- t(bs(X, knots=seq(-5,5,0.5), degree=3, intercept = TRUE))
 num_basis <- nrow(B)
@@ -84,7 +84,7 @@ for (i in 1:5) {
 
 # Fitting Splines in Stan
 
-## Building B-splines in R
+### Building B-splines in R
 
 We are interested in using splines for regression; given an order and a set of knots, we would like to estimate the spline coefficients, $a_i$, that give the best fit to the data. For now, we focus on the univariate case and assume that the data consists of pairs of observation $\{(x_1, y_1), \ldots, (x_n, y_n)\}$ and our goal is to predict $y$ from $x$. There are some readily available functions in `R` to generate the B-splines. These functions can be used to build a design matrix. Then, this design matrix can be passed on to Stan for a usual linear regression. The code below demonstrates how this can be done for a toy example:
 
@@ -124,14 +124,13 @@ for (i in 1:length(Y)) {
   Y_hat_lb[i] <- quantile(ff$Y_hat[,i],probs = 0.25)
   Y_hat_ub[i] <- quantile(ff$Y_hat[,i],probs = 0.75)
 }
-plot(X,Y)
+plot(X,Y, col="azure4")
 polygon(c(rev(X), X), c(rev(Y_hat_lb), Y_hat_ub), col = 'grey80', border = NA)
 lines(X, Y_hat_med, col="Red", lw=2)
 lines(X, Y_true, col="blue",lw=2)
-points(X,Y)
 ```
 
-## Building B-splines in Stan
+### Building B-splines in Stan
 
 It is also possible to form B-splines directly in Stan. Having all the code in the same place (from forming the B-splines to fitting them to the data) gives us more flexibility and allows us to adjust the knots locations or order of B-splines in the Stan program. The Stan recursive function for building the B-splines is shown below. Its output is $B_{ind,order} (t)$ for the set of given extended knots. 
 
@@ -166,7 +165,7 @@ functions {
 }
 ```
 
-This function can then be called, e.g., in the `transformed data` block, to form the B-splines. An example code, `b_spline.stan`, is shown below:
+This function can then be called, e.g., in the `transformed data` block, to form the B-splines. An example code, `b_spline.stan`, is shown below. 
 
 ```
 data {
@@ -207,10 +206,137 @@ transformed parameters {
 model {
   // Priors
   a_raw ~ normal(0, 1);
+  a0 ~ normal(0, 1);
   tau ~ normal(0, 1);
-  sigma ~ cauchy(0, 1);
+  sigma ~ normal(0, 1);
   
   //Likelihood
   Y ~ normal(Y_hat, sigma);
 }
+```
+
+In this example, we take in the set of knots as an input. Alternatively, we could defined the knots within the Stan code. Usually a good way to set the knots is by setting them to the percentiles of the data. (In the next section, we discuss the choice of knots locations in details.) In the code below, we simulate the data and fit B-splines to it using the Stan program above. 
+
+```{r use_Stan_spline, message=FALSE, comment=NA, cache=TRUE}
+library("splines")
+library("rstan")
+num_knots <- 10
+spline_degree <- 3
+num_basis <- num_knots + spline_degree - 1
+X <- seq(from=-5, to=5, by=.1)
+num_data <- length(X)
+knots <- unname(quantile(X,probs=seq(from=0, to=1, length.out = num_knots)))
+a0 <- 0.2
+a <- rnorm(num_basis, 0, 1)
+B_true <- t(bs(X, df=num_basis, degree=spline_degree, intercept = TRUE))
+Y_true <- as.vector(a0*X + a%*%B_true)
+Y <- Y_true + rnorm(length(X), 0, 0.2)
+rstan_options(auto_write = TRUE)
+options(mc.cores = parallel::detectCores())
+spline_model <- stan_model("b_spline.stan")
+fit_spline <- sampling(spline_model, iter=500, control = list(adapt_delta=0.95))
+```
+
+The true curve (in blue), the fitted curve (in red), and the $50\%$ undertainty intervals (in grey) are shown below:
+
+```{r plot_fit_basis_2, echo=FALSE, message=FALSE, comment=NA, fig.height=3.5}
+library("rstan")
+ff<-extract(fit_spline)
+Y_hat_med <- array(NA, length(Y))
+Y_hat_ub <- array(NA, length(Y))
+Y_hat_lb <- array(NA, length(Y))
+for (i in 1:length(Y)) {
+  Y_hat_med[i] <- median(ff$Y_hat[,i]);
+  Y_hat_lb[i] <- quantile(ff$Y_hat[,i],probs = 0.25)
+  Y_hat_ub[i] <- quantile(ff$Y_hat[,i],probs = 0.75)
+}
+plot(X,Y, col="azure4")
+polygon(c(rev(X), X), c(rev(Y_hat_lb), Y_hat_ub), col = 'grey80', border = NA, lw=2)
+lines(X, Y_hat_med, col="Red", lw=1)
+lines(X, Y_true, col="blue",lw=1)
+```
+
+
+# Location of Knots and the Choice of Priors
+
+In practical problems, it is not always clear how to choose the number/location of the knots. Choosing too many/too few knots may lead to overfitting/underfitting. In this part, we introduce a prior that alleviates the problems associated with the choice of number/locations of the knots to a great extent. 
+
+Let us start by a simple observation. For any given set of knots, and any B-spline order, we have:
+$$
+\sum_{i} B_{i,k}(x) = 1.
+$$
+The proof is simple and can be done by induction. This means that if the B-spline coefficients, $a_i = a$, are all equal, then the resulting spline is the constant function equal to $a$ all the time. In general, the closer the consecutive $a_i$ are to each other, the  smoother (less wiggly) is the resulting spline curve. In other words, B-splines are local bases that form the splines; if the the coefficients of near-by B-splines are close to each other, we will have less local variability. 
+
+This motivates the use of priors enforcing smoothness across the coefficients, $a_i$. With such priors, we can choose a large number of knots and do not worry about overfitting. Here, we propose an AR(1) prior as follows:
+$$
+a_1 \sim \mathcal{N}(0,\tau) \qquad a_i\sim\mathcal{N}(a_{i-1}, \tau) \qquad \tau\sim\mathcal{N}(0,1)
+$$
+
+The Stan code, `b_spline_penalized.stan`, is the same as before except for the `transformed parameters` block:
+
+```
+transformed parameters {
+  row_vector[num_basis] a;
+  vector[num_data] Y_hat;
+  a[1] = a_raw[1];
+  for (i in 2:num_basis)
+    a[i] = a[i-1] + a_raw[i]*tau; 
+  Y_hat = a0*to_vector(X) + to_vector(a*B);
+}
+```
+
+ To demonstrate the advantage of using this smoothing prior, we consider an extreme case where the number of knots for estimation is much larger than the true number of knots. We generate the synthetic data with 10 knots, but for the Stan program, we set the number of knots to 100 (ten times more than the true number). Then, we fit the model with and without the smoothing prior and compare the results. The two fits are shown in the figure below. We observe that without using the smoothing prior (red curve), the large number of knots results in a wiggly curve (overfitting). When the smoothing prior is used (blue curve), we achieve a much smoother curve.  
+ 
+ 
+ 
+```{r smoothing_prior, message=FALSE, comment=NA, cache=TRUE}
+library(rstan)
+library(splines)
+set.seed(1234)
+num_knots <- 10 # true number of knots
+spline_degree <- 3
+num_basis <- num_knots + spline_degree - 1
+X <- seq(from=-10, to=10, by=.1)
+knots <- unname(quantile(X,probs=seq(from=0, to=1, length.out = num_knots)))
+num_data <- length(X)
+a0 <- 0.2
+a <- rnorm(num_basis, 0, 1)
+B_true <- t(bs(X, df=num_basis, degree=spline_degree, intercept = TRUE))
+Y_true <- as.vector(a0*X + a%*%B_true)
+Y <- Y_true + rnorm(length(X), 0, 0.2)
+
+num_knots <- 100; # number of knots for fitting
+num_basis <- num_knots + spline_degree - 1
+knots <- unname(quantile(X,probs=seq(from=0, to=1, length.out = num_knots)))
+rstan_options(auto_write = TRUE);
+options(mc.cores = parallel::detectCores());
+spline_model<-stan_model("b_spline.stan")
+spline_penalized_model<-stan_model("b_spline_penalized.stan")
+fit_spline<-sampling(spline_model,iter=500,control = list(adapt_delta=0.95))
+fit_spline_penalized<-sampling(spline_penalized_model,iter=500,control = list(adapt_delta=0.95))
+```
+
+```{r plot_res, echo=FALSE, comment=NA, message=NA, fig.height=6}
+ff<-extract(fit_spline)
+Y_hat_med <- array(NA, length(Y))
+Y_hat_ub <- array(NA, length(Y))
+Y_hat_lb <- array(NA, length(Y))
+for (i in 1:length(Y)) {
+  Y_hat_med[i] <- median(ff$Y_hat[,i]);
+  Y_hat_lb[i] <- quantile(ff$Y_hat[,i],probs = 0.25)
+  Y_hat_ub[i] <- quantile(ff$Y_hat[,i],probs = 0.75)
+}
+ff<-extract(fit_spline_penalized)
+Y_hat_med_pen <- array(NA, length(Y))
+Y_hat_ub_pen <- array(NA, length(Y))
+Y_hat_lb_pen <- array(NA, length(Y))
+for (i in 1:length(Y)) {
+  Y_hat_med_pen[i] <- median(ff$Y_hat[,i]);
+  Y_hat_lb_pen[i] <- quantile(ff$Y_hat[,i],probs = 0.25)
+  Y_hat_ub_pen[i] <- quantile(ff$Y_hat[,i],probs = 0.75)
+}
+plot(X,Y, col="azure4")
+lines(X, Y_hat_med, col="Red", lw=2, lty=1)
+lines(X, Y_hat_med_pen, col="blue",lw=2, lty=1)
+legend(-1,-2,0,legend=c("fit without smoothing prior", "fit with smoothing prior"), col=c("red", "blue"), lw=4, box.lty=0, lty=1, border="white")
 ```

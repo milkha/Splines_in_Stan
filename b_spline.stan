@@ -65,8 +65,9 @@ transformed parameters {
 model {
   // Priors
   a_raw ~ normal(0, 1);
+  a0 ~ normal(0, 1);
   tau ~ normal(0, 1);
-  sigma ~ cauchy(0, 1);
+  sigma ~ normal(0, 1);
   
   //Likelihood
   Y ~ normal(Y_hat, sigma);
