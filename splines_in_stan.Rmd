@@ -267,7 +267,7 @@ $$
 $$
 The proof is simple and can be done by induction. This means that if the B-spline coefficients, $a_i = a$, are all equal, then the resulting spline is the constant function equal to $a$ all the time. In general, the closer the consecutive $a_i$ are to each other, the  smoother (less wiggly) is the resulting spline curve. In other words, B-splines are local bases that form the splines; if the the coefficients of near-by B-splines are close to each other, we will have less local variability. 
 
-This motivates the use of priors enforcing smoothness across the coefficients, $a_i$. With such priors, we can choose a large number of knots and do not worry about overfitting. Here, we propose an AR(1) prior as follows:
+This motivates the use of priors enforcing smoothness across the coefficients, $a_i$. With such priors, we can choose a large number of knots and do not worry about overfitting. Here, we propose a random-walk prior as follows:
 $$
 a_1 \sim \mathcal{N}(0,\tau) \qquad a_i\sim\mathcal{N}(a_{i-1}, \tau) \qquad \tau\sim\mathcal{N}(0,1)
 $$
