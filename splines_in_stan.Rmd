@@ -340,3 +340,7 @@ lines(X, Y_hat_med, col="Red", lw=2, lty=1)
 lines(X, Y_hat_med_pen, col="blue",lw=2, lty=1)
 legend(-1,-2,0,legend=c("fit without smoothing prior", "fit with smoothing prior"), col=c("red", "blue"), lw=4, box.lty=0, lty=1, border="white")
 ```
+
+#### License
+
+The code and text are copyrighted by Milad Kharratzadeh and licensed under [BSD (3-clause)](https://opensource.org/licenses/BSD-3-Clause) and the text is licensed under [CC-BY NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/).
