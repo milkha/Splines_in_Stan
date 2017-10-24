@@ -1,6 +1,8 @@
 ---
 title: "Splines In Stan"
-author: "Milad Kharratzadeh"
+author: | 
+  | Milad Kharratzadeh
+  | milad.kharratzadeh@gmail.com
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 output: pdf_document
 ---
@@ -15,7 +17,7 @@ In this document, we discuss the implementation of splines in Stan. We start by 
 
 # Introduction to Splines
 
-Splines are continuous, piece-wise polynomial functions. B-splines or basis splines are the building blocks of spline functions:  any spline function of given degree can be expressed as a linear combination of B-splines of that degree. There are two parameters that uniquely define a family of B-spline functions: (i) the polynomial degree, $p$; and (ii) a non-decreasing sequence of knots, $t_1, \ldots, t_q$. The order of a spline family is defined as $p+1$. B-splines of order 1 ($p=0$) are a set of piece-wise constant functions:
+Splines are continuous, piece-wise polynomial functions. B-splines or basis splines are the building blocks of spline functions:  any spline function of a given degree can be expressed as a linear combination of B-splines of that degree. There are two parameters that uniquely define a family of B-spline functions: (i) the polynomial degree, $p$; and (ii) a non-decreasing sequence of knots, $t_1, \ldots, t_q$. The order of a spline family is defined as $p+1$. B-splines of order 1 ($p=0$) are a set of piece-wise constant functions:
 $$
 B_{i,1}(x) := \left\{
 \begin{matrix} 
@@ -42,7 +44,7 @@ $$
 \mathrm{extended \ knots: } \ \underbrace{t_1,\ldots, t_1}_{k-1 \ \rm{ times}}, \underbrace{t_1, t_2, t_3, \ldots, t_q,}_{\rm original \ knot\  sequence}  \underbrace{t_q, \ldots, t_q}_{k-1 \ \rm{ times}}.
 $$
 The recursive formulation described above is defined  over the extended knots. If we do not extend the sequence of knots, we will not have B-spline functions covering the areas around the edges of the interval $[t_1, t_q)$. 
-The second-order B-spline, $B_{i,2}$, has, in general, two linear pieces which join continuously at $t_{i+1}$ to form a piecewise linear function and vanishes outside the interval $[t_i, t_{i+2})$. A family of second-order B-splines for knots$=\{-5,-4,-3,-2,-1,0,1,2,3,4,5\}$ are shown below: 
+The second-order B-spline, $B_{i,2}$, has, in general, two linear pieces which join continuously at $t_{i+1}$ to form a piecewise linear function and vanishes outside the interval $[t_i, t_{i+2})$. A family of second-order B-splines for knots$=\{-5,-4,-3,-2,-1,0,1,2,3,4,5\}$ is shown below: 
 
 
 ```{r plot_spline_2, echo=FALSE, fig.height=3, fig.width=7.5, cache=TRUE}
@@ -52,7 +54,7 @@ B <- bs(X, knots=seq(-5,5,1), degree=1, intercept = TRUE)
 matplot(X, B, type="l", xlab = "x", ylab = "B-splines of order 2")
 ```
 
-As we can see, all the first-order B-splines, except the first and the last ones,  consists of two linear pieces. Those two splines are defined around the edge of the interval, and because of the knot extension, have two equal knots. Similarly, B-splines of order $k$ consist of $k$ pieces of polynomials with degree $k-1$ (except those B-splines near the borders). These $k$ pieces are joined continuously at $k-1$ interior knots and moreover, are $k-2$ times differentiable. For instance, B-splines of order 4 have differenitals of orders 1 and 2; that is why the fourth-order B-splines (which consist of cubic polynomials) are widely used in practice.  In the Figure below, we show a family of fourth-order B-splines:
+As we can see, all the first-order B-splines, except the first and the last ones,  consist of two linear pieces. Those two splines are defined around the edge of the interval, and because of the knot extension, have two equal knots. Similarly, B-splines of order $k$ consist of $k$ pieces of polynomials with degree $k-1$ (except those B-splines near the borders). These $k$ pieces are joined continuously at $k-1$ interior knots and moreover, are $k-2$ times differentiable. For instance, B-splines of order 4 have differenitals of orders 1 and 2; that is why the fourth-order B-splines (which consist of cubic polynomials) are widely used in practice.  In the Figure below, we show a family of fourth-order B-splines:
 
 ```{r plot_spline_4, echo=FALSE, fig.height=3, fig.width=7.5, cache=TRUE}
 library(splines)
@@ -111,7 +113,7 @@ lines <- readLines(file_path, encoding="ASCII");
 for (n in 1:length(lines)) cat(lines[n],'\n');
 ```
 
-The true curve (in blue), the fitted curve (in red), and the $50\%$ undertainty intervals (in grey) are shown below:
+The true curve (in blue), the fitted curve (in red), and the $50\%$ uncertainty intervals (in grey) are shown below:
 
 ```{r plot_fit_basis, echo=FALSE, message=FALSE, comment=NA, fig.height=3.5}
 library("rstan")
@@ -215,7 +217,7 @@ model {
 }
 ```
 
-In this example, we take in the set of knots as an input. Alternatively, we could defined the knots within the Stan code. Usually a good way to set the knots is by setting them to the percentiles of the data. (In the next section, we discuss the choice of knots locations in details.) In the code below, we simulate the data and fit B-splines to it using the Stan program above. 
+In this example, we take in the set of knots as an input. Alternatively, we could define the knots within the Stan code. Usually a good way to set the knots is by setting them to the percentiles of the data. (In the next section, we discuss the choice of knots locations.) In the code below, we simulate the data and fit B-splines to it using the Stan program above. 
 
 ```{r use_Stan_spline, message=FALSE, comment=NA, cache=TRUE}
 library("splines")
@@ -265,11 +267,11 @@ Let us start by a simple observation. For any given set of knots, and any B-spli
 $$
 \sum_{i} B_{i,k}(x) = 1.
 $$
-The proof is simple and can be done by induction. This means that if the B-spline coefficients, $a_i = a$, are all equal, then the resulting spline is the constant function equal to $a$ all the time. In general, the closer the consecutive $a_i$ are to each other, the  smoother (less wiggly) is the resulting spline curve. In other words, B-splines are local bases that form the splines; if the the coefficients of near-by B-splines are close to each other, we will have less local variability. 
+The proof is simple and can be done by induction. This means that if the B-spline coefficients, $a_i = a$, are all equal, then the resulting spline is the constant function equal to $a$ all the time. In general, the closer the consecutive $a_i$ are to each other, the  smoother (less wiggly) the resulting spline curve is. In other words, B-splines are local bases that form the splines; if the the coefficients of nearby B-splines are close to each other, we will have less local variability. 
 
 This motivates the use of priors enforcing smoothness across the coefficients, $a_i$. With such priors, we can choose a large number of knots and do not worry about overfitting. Here, we propose a random-walk prior as follows:
 $$
-a_1 \sim \mathcal{N}(0,\tau) \qquad a_i\sim\mathcal{N}(a_{i-1}, \tau) \qquad \tau\sim\mathcal{N}(0,1)
+a_1 \sim \mathcal{N}(0,1) \qquad a_i\sim\mathcal{N}(a_{i-1}, \tau) \qquad \tau\sim\mathcal{N}(0,1)
 $$
 
 The Stan code, `b_spline_penalized.stan`, is the same as before except for the `transformed parameters` block:
